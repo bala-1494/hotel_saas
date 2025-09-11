@@ -88,16 +88,33 @@ export class GoogleMapsService {
     ].join(',');
 
     const url = `${this.baseUrl}/details/json?place_id=${placeId}&fields=${fields}&key=${this.apiKey}`;
+    console.log('Making Google Maps API request to:', url.replace(this.apiKey, 'REDACTED'));
 
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Google Maps API error: ${response.statusText}`);
+      console.error('Google Maps API HTTP error:', response.status, response.statusText);
+      throw new Error(`Google Maps API HTTP error: ${response.status} ${response.statusText}`);
     }
 
     const data: GoogleMapsResponse = await response.json();
+    console.log('Google Maps API response status:', data.status);
     
     if (data.status !== 'OK') {
-      throw new Error(`Google Maps API error: ${data.status}`);
+      console.error('Google Maps API error response:', data);
+      
+      // Provide more specific error messages
+      switch (data.status) {
+        case 'REQUEST_DENIED':
+          throw new Error('Google Maps API access denied. Please check that the Places API is enabled and your API key has the correct permissions.');
+        case 'INVALID_REQUEST':
+          throw new Error('Invalid request to Google Maps API. Please check the place ID format.');
+        case 'OVER_QUERY_LIMIT':
+          throw new Error('Google Maps API quota exceeded. Please check your billing settings.');
+        case 'ZERO_RESULTS':
+          throw new Error('No place found with the provided ID.');
+        default:
+          throw new Error(`Google Maps API error: ${data.status}`);
+      }
     }
 
     return data.result;
@@ -163,7 +180,7 @@ export class GoogleMapsService {
         phone: place.formatted_phone_number || null,
         email: null, // Not available from Google Maps
         website: place.website || null,
-        rating: place.rating || 0,
+        rating: place.rating || null,
         category,
         yearsInService: null, // Not available from Google Maps
         photos,

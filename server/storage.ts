@@ -52,8 +52,13 @@ export class MemStorage implements IStorage {
       rating: insertHotel.rating ?? null,
       category: insertHotel.category ?? null,
       yearsInService: insertHotel.yearsInService ?? null,
-      photos: insertHotel.photos ?? null,
-      reviews: insertHotel.reviews ?? null,
+      photos: Array.isArray(insertHotel.photos) ? insertHotel.photos as string[] : [],
+      reviews: Array.isArray(insertHotel.reviews) ? insertHotel.reviews as Array<{
+        author: string;
+        text: string;
+        rating: number;
+        date: string;
+      }> : [],
       coordinates: insertHotel.coordinates ?? null,
     };
     this.hotels.set(id, hotel);
