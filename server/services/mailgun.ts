@@ -28,6 +28,14 @@ export class MailgunService {
 
   async sendBookingConfirmation(bookingData: BookingConfirmationData): Promise<void> {
     try {
+      // Debug logging
+      console.log('Mailgun Debug Info:');
+      console.log('- API Key present:', !!this.apiKey);
+      console.log('- API Key length:', this.apiKey?.length || 0);
+      console.log('- Domain:', this.domain);
+      console.log('- Sender Email:', this.senderEmail);
+      console.log('- Base URL:', this.baseUrl);
+      
       const emailContent = this.generateBookingEmail(bookingData);
       
       const formData = new FormData();
