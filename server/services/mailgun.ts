@@ -12,11 +12,13 @@ interface BookingConfirmationData {
 export class MailgunService {
   private apiKey: string;
   private domain: string;
+  private senderEmail: string;
   private baseUrl: string;
 
   constructor() {
     this.apiKey = process.env.MAILGUN_API_KEY || '';
     this.domain = process.env.MAILGUN_DOMAIN || '';
+    this.senderEmail = process.env.MAILGUN_SENDER_EMAIL || 'Mailgun Sandbox <postmaster@www.kutkrew.com>';
     this.baseUrl = `https://api.mailgun.net/v3/${this.domain}`;
   }
 
@@ -29,7 +31,7 @@ export class MailgunService {
       const emailContent = this.generateBookingEmail(bookingData);
       
       const formData = new FormData();
-      formData.append('from', `Hotel Page Generator <noreply@${this.domain}>`);
+      formData.append('from', this.senderEmail);
       formData.append('to', bookingData.email);
       formData.append('subject', `Booking Confirmation - ${bookingData.hotelName}`);
       formData.append('html', emailContent);
