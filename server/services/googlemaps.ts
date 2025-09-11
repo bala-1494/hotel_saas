@@ -41,23 +41,123 @@ export class GoogleMapsService {
     }
   }
 
-  extractPlaceIdFromUrl(url: string): string | null {
-    // Handle different Google Maps URL formats
-    const patterns = [
-      /maps\.app\.goo\.gl\/([^\/\?]+)/,
-      /place\/[^\/]+\/data=.*!3m1!4b1!4m.*!3m.*!1s([^!]+)/,
-      /place_id=([^&]+)/,
-      /@[\d\.-]+,[\d\.-]+.*data=.*!3m.*!1s([^!]+)/
-    ];
-
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match) {
-        return match[1];
+  async extractPlaceIdFromUrl(url: string): Promise<string | null> {
+    try {
+      const urlObj = new URL(url);
+      const params = new URLSearchParams(urlObj.search);
+      
+      // Check for direct place_id parameters
+      const placeIdParams = [
+        'place_id',
+        'query_place_id',
+        'origin_place_id', 
+        'destination_place_id'
+      ];
+      
+      for (const param of placeIdParams) {
+        const placeId = params.get(param);
+        if (placeId && placeId.startsWith('ChIJ')) {
+          return placeId;
+        }
       }
+      
+      // Check for q=place_id: format
+      const qParam = params.get('q');
+      if (qParam && qParam.startsWith('place_id:')) {
+        const placeId = qParam.replace('place_id:', '');
+        if (placeId.startsWith('ChIJ')) {
+          return placeId;
+        }
+      }
+      
+      // Handle URLs with embedded place data - look for ftid parameter
+      const ftid = params.get('ftid');
+      if (ftid && ftid.startsWith('0x')) {
+        // Try to extract place_id from the URL path or other parameters
+        const pathMatch = url.match(/\/maps\/place\/[^@]+@[^\/]+\/data=([^!]+)/);
+        if (pathMatch) {
+          // Look for place_id in the data parameter
+          const dataMatch = pathMatch[1].match(/!1s([A-Za-z0-9_-]+)/);
+          if (dataMatch && dataMatch[1].startsWith('ChIJ')) {
+            return dataMatch[1];
+          }
+        }
+      }
+      
+      // Fallback: extract place name from URL and use Text Search
+      const placeName = this.extractPlaceNameFromUrl(url);
+      if (placeName) {
+        console.log('No direct place_id found, attempting text search for:', placeName);
+        return await this.getPlaceIdFromTextSearch(placeName);
+      }
+      
+      console.log('Could not extract valid place_id or place name from URL:', url);
+      return null;
+    } catch (error) {
+      console.error('Error parsing URL:', error);
+      return null;
     }
+  }
 
-    return null;
+  extractPlaceNameFromUrl(url: string): string | null {
+    try {
+      // Extract place name from various Google Maps URL formats
+      const patterns = [
+        /\/maps\/place\/([^@/?]+)/,  // Standard place URLs
+        /\/maps\/search\/([^@/?]+)/, // Search URLs
+        /[?&]q=([^&]+)/              // Query parameter
+      ];
+      
+      for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) {
+          const placeName = decodeURIComponent(match[1].replace(/\+/g, ' '));
+          // Clean up the place name
+          return placeName.replace(/[^\w\s,-]/g, ' ').trim();
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error extracting place name:', error);
+      return null;
+    }
+  }
+
+  async getPlaceIdFromTextSearch(placeName: string): Promise<string | null> {
+    try {
+      const url = `${this.baseUrl}/places:searchText`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': this.apiKey,
+          'X-Goog-FieldMask': 'places.id,places.displayName'
+        },
+        body: JSON.stringify({
+          textQuery: placeName,
+          maxResultCount: 1
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Text search failed:', response.status, response.statusText);
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.places && data.places.length > 0) {
+        const placeId = data.places[0].id;
+        console.log('Found place_id via text search:', placeId);
+        return placeId;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error in text search:', error);
+      return null;
+    }
   }
 
   async resolveShortUrl(shortUrl: string): Promise<string> {
@@ -165,7 +265,7 @@ export class GoogleMapsService {
       }
 
       // Extract place ID
-      const placeId = this.extractPlaceIdFromUrl(resolvedUrl);
+      const placeId = await this.extractPlaceIdFromUrl(resolvedUrl);
       if (!placeId) {
         throw new Error('Could not extract place ID from URL');
       }
