@@ -32,7 +32,7 @@ interface GoogleMapsResponse {
 
 export class GoogleMapsService {
   private apiKey: string;
-  private baseUrl = 'https://maps.googleapis.com/maps/api/place';
+  private baseUrl = 'https://places.googleapis.com/v1';
 
   constructor() {
     this.apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || '';
@@ -74,54 +74,76 @@ export class GoogleMapsService {
   }
 
   async getPlaceDetails(placeId: string): Promise<GoogleMapsPlace> {
-    const fields = [
-      'place_id',
-      'name',
-      'formatted_address',
-      'formatted_phone_number',
-      'website',
+    // Field mask for new Places API - specify which fields we want
+    const fieldMask = [
+      'id',
+      'displayName',
+      'formattedAddress', 
+      'nationalPhoneNumber',
+      'websiteUri',
       'rating',
       'photos',
       'reviews',
-      'geometry/location',
+      'location',
       'types'
     ].join(',');
 
-    const url = `${this.baseUrl}/details/json?place_id=${placeId}&fields=${fields}&key=${this.apiKey}`;
-    console.log('Making Google Maps API request to:', url.replace(this.apiKey, 'REDACTED'));
+    const url = `${this.baseUrl}/places/${placeId}`;
+    console.log('Making Google Maps API (New) request to:', url);
 
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': this.apiKey,
+        'X-Goog-FieldMask': fieldMask
+      }
+    });
+
     if (!response.ok) {
       console.error('Google Maps API HTTP error:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('Error response body:', errorText);
       throw new Error(`Google Maps API HTTP error: ${response.status} ${response.statusText}`);
     }
 
-    const data: GoogleMapsResponse = await response.json();
-    console.log('Google Maps API response status:', data.status);
+    const data = await response.json();
+    console.log('Google Maps API response received successfully');
     
-    if (data.status !== 'OK') {
-      console.error('Google Maps API error response:', data);
-      
-      // Provide more specific error messages
-      switch (data.status) {
-        case 'REQUEST_DENIED':
-          throw new Error('Google Maps API access denied. Please check that the Places API is enabled and your API key has the correct permissions.');
-        case 'INVALID_REQUEST':
-          throw new Error('Invalid request to Google Maps API. Please check the place ID format.');
-        case 'OVER_QUERY_LIMIT':
-          throw new Error('Google Maps API quota exceeded. Please check your billing settings.');
-        case 'ZERO_RESULTS':
-          throw new Error('No place found with the provided ID.');
-        default:
-          throw new Error(`Google Maps API error: ${data.status}`);
-      }
-    }
+    // Transform new API response to match legacy format for compatibility
+    const transformedData: GoogleMapsPlace = {
+      place_id: data.id || placeId,
+      name: data.displayName?.text || '',
+      formatted_address: data.formattedAddress || '',
+      formatted_phone_number: data.nationalPhoneNumber || undefined,
+      website: data.websiteUri || undefined,
+      rating: data.rating || undefined,
+      photos: data.photos?.map((photo: any) => ({
+        photo_reference: photo.name, // New API uses 'name' field
+        width: photo.widthPx || 800,
+        height: photo.heightPx || 600
+      })) || [],
+      reviews: data.reviews?.map((review: any) => ({
+        author_name: review.authorAttribution?.displayName || 'Anonymous',
+        text: review.text?.text || '',
+        rating: review.rating || 0,
+        relative_time_description: review.relativePublishTimeDescription || ''
+      })) || [],
+      geometry: {
+        location: {
+          lat: data.location?.latitude || 0,
+          lng: data.location?.longitude || 0
+        }
+      },
+      types: data.types || []
+    };
 
-    return data.result;
+    return transformedData;
   }
 
-  async getPhotoUrl(photoReference: string, maxWidth: number = 800): Promise<string> {
-    return `${this.baseUrl}/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${this.apiKey}`;
+  async getPhotoUrl(photoName: string, maxWidth: number = 800): Promise<string> {
+    // New Places API uses a different photo endpoint format
+    return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${this.apiKey}`;
   }
 
   async fetchHotelFromUrl(mapsUrl: string) {
