@@ -1,0 +1,74 @@
+Flow 2: Hotel Page Generation
+User is on the "Generation Form" screen.
+
+User pastes a Google Maps URL into the input field. This can be a short link (maps.app.goo.gl/...) from a mobile share or a full web URL.
+
+User clicks the "Generate Content" button.
+
+System performs the following actions:
+
+Displays a loading spinner: "Fetching hotel data from Google Maps..."
+
+Sends a request to the Google Maps Places API to retrieve the hotel's details (including placeId, photos, reviews, etc.).
+
+Displays a new loading spinner: "Generating creative content with Gemini AI..."
+
+Sends the fetched data to the Gemini API via LangChain.
+
+The AI returns a structured JSON object containing a headline, introduction, review summary, etc.
+
+UI Transformation:
+
+The system saves all fetched data and AI-generated content into the session state.
+
+The application state is updated, and the UI re-renders to show the "Generated Page". The initial input form is now hidden.
+
+Flow 3: Viewing & Interacting with the Generated Page
+User is presented with a mobile-friendly one-pager containing:
+
+Hotel Name & AI-generated headline.
+
+Rating, star category, and years in service.
+
+A gallery of hotel photos.
+
+An AI-generated "Our Story" section.
+
+A "What Our Guests Say" section with an AI summary and actual reviews.
+
+An interactive map with the hotel's location and address.
+
+User sees a floating "Book Now" button fixed to the top-right of the screen.
+
+User can scroll through all the generated content.
+
+At the bottom of the page, the user can click "Generate Another Page" to return to the initial input form.
+
+Flow 4: Hotel Booking & Email Confirmation
+User clicks the floating "Book Now" button.
+
+A modal booking form appears on the screen. The form contains:
+
+Check-in and Check-out date pickers.
+
+A dropdown for Room Type.
+
+A text field for the user's email address.
+
+An "X" button to manually close the form.
+
+User fills out the booking details and clicks "Confirm Booking".
+
+System Validation:
+
+Checks if the email is valid and the dates are logical.
+
+If invalid, an error is shown inside the form.
+
+Email Trigger:
+
+If the form is valid, the application sends a request to the Mailgun API to send a confirmation email to the user's address.
+
+Success: The booking form automatically closes, and a temporary "toast" notification appears confirming the booking.
+
+Failure: An error message is displayed inside the form, showing the specific reason for the failure from the Mailgun API.
