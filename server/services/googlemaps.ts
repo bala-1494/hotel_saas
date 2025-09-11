@@ -104,6 +104,16 @@ export class GoogleMapsService {
       console.error('Google Maps API HTTP error:', response.status, response.statusText);
       const errorText = await response.text();
       console.error('Error response body:', errorText);
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error?.status === 'INVALID_ARGUMENT' && errorData.error?.message?.includes('Place ID')) {
+          throw new Error('Invalid place ID. Please check that you\'re using a valid Google Maps URL for a hotel.');
+        }
+      } catch (parseError) {
+        // If we can't parse the error, fall back to generic message
+      }
+      
       throw new Error(`Google Maps API HTTP error: ${response.status} ${response.statusText}`);
     }
 
