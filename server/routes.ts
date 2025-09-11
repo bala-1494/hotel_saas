@@ -124,32 +124,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create booking
       const booking = await storage.createBooking(bookingData);
 
-      // Send confirmation email
-      try {
-        await mailgunService.sendBookingConfirmation({
-          email: booking.email,
-          hotelName: hotel.name,
-          checkinDate: booking.checkinDate,
-          checkoutDate: booking.checkoutDate,
-          roomType: booking.roomType,
-          hotelAddress: hotel.address,
-          hotelPhone: hotel.phone,
-          bookingId: booking.id,
-        });
-      } catch (emailError) {
-        console.error('Email sending failed:', emailError);
-        // Don't fail the booking if email fails
-        return res.status(201).json({
-          booking,
-          emailStatus: 'failed',
-          message: 'Booking created successfully, but confirmation email could not be sent',
-        });
+      // Send confirmation email (only if Mailgun is configured)
+      let emailStatus = 'skipped';
+      let responseMessage = 'Booking confirmed successfully';
+      
+      if (mailgunService.isConfigured()) {
+        try {
+          await mailgunService.sendBookingConfirmation({
+            email: booking.email,
+            hotelName: hotel.name,
+            checkinDate: booking.checkinDate,
+            checkoutDate: booking.checkoutDate,
+            roomType: booking.roomType,
+            hotelAddress: hotel.address,
+            hotelPhone: hotel.phone || undefined,
+            bookingId: booking.id,
+          });
+          emailStatus = 'sent';
+        } catch (emailError) {
+          console.error('Email sending failed:', emailError);
+          emailStatus = 'failed';
+          responseMessage = 'Booking created successfully, but confirmation email could not be sent';
+        }
+      } else {
+        console.warn('Mailgun not configured - skipping email');
+        responseMessage = 'Booking confirmed successfully (email service not configured)';
       }
 
       res.status(201).json({
         booking,
-        emailStatus: 'sent',
-        message: 'Booking confirmed successfully',
+        emailStatus,
+        message: responseMessage,
       });
 
     } catch (error) {

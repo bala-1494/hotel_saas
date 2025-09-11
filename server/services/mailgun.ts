@@ -17,12 +17,11 @@ export class MailgunService {
   constructor() {
     this.apiKey = process.env.MAILGUN_API_KEY || '';
     this.domain = process.env.MAILGUN_DOMAIN || '';
-    
-    if (!this.apiKey || !this.domain) {
-      throw new Error('Mailgun API key and domain are required');
-    }
-    
     this.baseUrl = `https://api.mailgun.net/v3/${this.domain}`;
+  }
+
+  isConfigured(): boolean {
+    return !!(this.apiKey && this.domain);
   }
 
   async sendBookingConfirmation(bookingData: BookingConfirmationData): Promise<void> {

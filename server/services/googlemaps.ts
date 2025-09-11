@@ -160,12 +160,12 @@ export class GoogleMapsService {
         name: place.name,
         address: place.formatted_address,
         city,
-        phone: place.formatted_phone_number || '',
-        email: '', // Not available from Google Maps
-        website: place.website || '',
+        phone: place.formatted_phone_number || null,
+        email: null, // Not available from Google Maps
+        website: place.website || null,
         rating: place.rating || 0,
         category,
-        yearsInService: '', // Not available from Google Maps
+        yearsInService: null, // Not available from Google Maps
         photos,
         reviews,
         coordinates: {

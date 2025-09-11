@@ -42,9 +42,19 @@ export class MemStorage implements IStorage {
   async createHotel(insertHotel: InsertHotel): Promise<Hotel> {
     const id = randomUUID();
     const hotel: Hotel = { 
-      ...insertHotel, 
+      ...insertHotel,
       id,
       createdAt: new Date(),
+      city: insertHotel.city ?? null,
+      phone: insertHotel.phone ?? null,
+      email: insertHotel.email ?? null,
+      website: insertHotel.website ?? null,
+      rating: insertHotel.rating ?? null,
+      category: insertHotel.category ?? null,
+      yearsInService: insertHotel.yearsInService ?? null,
+      photos: insertHotel.photos ?? null,
+      reviews: insertHotel.reviews ?? null,
+      coordinates: insertHotel.coordinates ?? null,
     };
     this.hotels.set(id, hotel);
     return hotel;
