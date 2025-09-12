@@ -11,7 +11,7 @@ import HotelPage from "@/pages/hotel-page";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 
-function Router() {
+function AppContent() {
   const { user, loading } = useAuth();
 
   // Show loading state while checking authentication
@@ -73,8 +73,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
+          <AppContent />
           <Toaster />
-          <Router />
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>

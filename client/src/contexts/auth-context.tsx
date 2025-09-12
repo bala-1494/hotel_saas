@@ -12,6 +12,35 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Function to save user to database immediately upon OAuth success
+async function saveUserToDatabase(user: User, session: Session | null) {
+  try {
+    console.log('Saving user to database:', user.id);
+    
+    const response = await fetch('/api/create-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`
+      },
+      body: JSON.stringify({
+        id: user.id,
+        email: user.email,
+        fullName: user.user_metadata?.full_name || null,
+        avatarUrl: user.user_metadata?.avatar_url || null,
+      })
+    });
+
+    if (response.ok) {
+      console.log('✅ User saved to database successfully');
+    } else {
+      console.error('❌ Failed to save user to database:', await response.text());
+    }
+  } catch (error) {
+    console.error('❌ Error saving user to database:', error);
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -34,6 +63,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (event === 'SIGNED_IN') {
           console.log('User signed in:', session?.user);
+          // STEP 1: Immediately save user to database upon successful OAuth
+          if (session?.user) {
+            saveUserToDatabase(session.user, session);
+          }
         } else if (event === 'SIGNED_OUT') {
           console.log('User signed out');
         }

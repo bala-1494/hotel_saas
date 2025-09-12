@@ -3,10 +3,18 @@ import { Card, CardContent } from "@/components/ui/card";
 
 interface LoadingStateProps {
   phase: 'fetching' | 'generating';
+  customMessage?: string;
 }
 
-export default function LoadingState({ phase }: LoadingStateProps) {
+export default function LoadingState({ phase, customMessage }: LoadingStateProps) {
   const getLoadingContent = () => {
+    if (customMessage) {
+      return {
+        title: customMessage,
+        subtitle: "Please wait..."
+      };
+    }
+    
     if (phase === 'fetching') {
       return {
         title: "Fetching hotel data from Google Maps...",

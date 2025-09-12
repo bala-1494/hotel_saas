@@ -16,8 +16,42 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  // Generate hotel page from Google Maps URL - SECURED with authentication
-  app.post("/api/generate-page", authenticateUser, rateLimit(300000, 10), async (req, res) => {
+  // STEP 1: Create user in database immediately upon OAuth success
+  app.post("/api/create-user", async (req, res) => {
+    try {
+      const { id, email, fullName, avatarUrl } = req.body;
+      
+      if (!id || !email) {
+        return res.status(400).json({ message: "User ID and email are required" });
+      }
+
+      // Check if user already exists
+      let user = await storage.getUser(id);
+      
+      if (!user) {
+        // Create new user record
+        user = await storage.createUser({
+          id,
+          email,
+          fullName: fullName || null,
+          avatarUrl: avatarUrl || null,
+        });
+        console.log(`✅ Created user in database: ${id}`);
+      } else {
+        console.log(`✅ User already exists in database: ${id}`);
+      }
+
+      res.json({ success: true, user });
+    } catch (error) {
+      console.error('Error creating user:', error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to create user" 
+      });
+    }
+  });
+
+  // STEP 2: Fetch and store hotel data from Google Maps URL - SECURED with authentication
+  app.post("/api/store-hotel-data", authenticateUser, rateLimit(300000, 10), async (req, res) => {
     try {
       const { mapsUrl } = req.body;
       const userId = req.user!.id; // Get userId from authenticated session
@@ -63,55 +97,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Generate AI content for the new hotel
-      const generatedContent = await geminiService.generateHotelContent({
-        hotelName: hotelData.name,
-        address: hotelData.address,
-        category: hotelData.category || 'Hotel',
-        rating: hotelData.rating || 0,
-        reviews: hotelData.reviews || [],
-      });
-
-      // Ensure user exists in our users table before creating hotel
-      console.log(`Checking if user exists in database: ${userId}`);
+      // STEP 2: User should already exist (created during OAuth)
+      console.log(`Fetching user from database: ${userId}`);
       let user = await storage.getUser(userId);
       
       if (!user) {
-        console.log(`User not found in database, creating new user record for: ${userId}`);
-        
-        // Get full user data from Supabase auth
-        const authHeader = req.headers.authorization!;
-        const token = authHeader.substring(7); // Remove 'Bearer '
-        const { data: authData } = await supabase.auth.getUser(token);
-        
-        console.log(`Supabase user metadata:`, {
-          id: authData?.user?.id,
-          email: authData?.user?.email,
-          fullName: authData?.user?.user_metadata?.full_name,
-          avatarUrl: authData?.user?.user_metadata?.avatar_url
+        return res.status(400).json({ 
+          message: "User not found in database. Please sign in again." 
         });
-        
-        // Create user record in our database
-        user = await storage.createUser({
-          id: userId,
-          email: req.user!.email,
-          fullName: authData?.user?.user_metadata?.full_name || null,
-          avatarUrl: authData?.user?.user_metadata?.avatar_url || null,
-        });
-        
-        console.log(`✅ Successfully created user record in database:`, user);
-      } else {
-        console.log(`✅ User already exists in database:`, user);
       }
+      
+      console.log(`✅ User found in database:`, user);
 
-      // Create new hotel record with AI-generated content
+      // STEP 2: Store hotel data in database FIRST (without AI content)
       const hotelCreateData = {
         ...hotelData,
         userId,
         googleMapsUrl: mapsUrl,
-        headline: generatedContent.headline,
-        story: generatedContent.story,
-        reviewSummary: generatedContent.reviewSummary,
+        // No AI content yet - will be added in next step
+        headline: null,
+        story: null,
+        reviewSummary: null,
         // Convert null values to undefined for schema compatibility
         email: hotelData.email || undefined,
         website: hotelData.website || undefined,
@@ -119,6 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       hotel = await storage.createHotel(hotelCreateData);
+      console.log(`✅ Hotel data stored in database:`, hotel.id);
 
       // Create hotel images from the photos data
       const images = [];
@@ -140,14 +147,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hotel,
         images,
         message: hasActiveHotel 
-          ? "Previous hotel page deactivated and new hotel page generated successfully"
-          : "Hotel page generated successfully"
+          ? "Previous hotel page deactivated and hotel data stored successfully"
+          : "Hotel data stored successfully. Ready for AI generation."
       });
 
     } catch (error) {
       console.error('Error generating hotel page:', error);
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Failed to generate hotel page" 
+      });
+    }
+  });
+
+  // STEP 3: Generate AI content from stored DB records
+  app.post("/api/generate-ai-content", authenticateUser, async (req, res) => {
+    try {
+      const { hotel_id } = req.body;
+      const userId = req.user!.id;
+
+      if (!hotel_id) {
+        return res.status(400).json({ message: "Hotel ID is required" });
+      }
+
+      // Get hotel data from database
+      const hotel = await storage.getHotel(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ message: "Hotel not found" });
+      }
+
+      // Verify user owns this hotel
+      if (hotel.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Generate AI content using DB records
+      console.log(`✅ Generating AI content from DB records for hotel: ${hotel_id}`);
+      const generatedContent = await geminiService.generateHotelContent({
+        hotelName: hotel.name,
+        address: hotel.address,
+        category: hotel.category || 'Hotel',
+        rating: hotel.rating || 0,
+        reviews: hotel.reviews || [],
+      });
+
+      // Update hotel record with AI-generated content
+      const updatedHotel = await storage.updateHotel(hotel_id, {
+        headline: generatedContent.headline,
+        story: generatedContent.story,
+        reviewSummary: generatedContent.reviewSummary,
+      });
+
+      console.log(`✅ AI content generated and stored for hotel: ${hotel_id}`);
+
+      res.json({
+        hotel_id: hotel_id,
+        content: generatedContent,
+        hotel: updatedHotel,
+        message: "AI content generated successfully from database records"
+      });
+
+    } catch (error) {
+      console.error('Error generating AI content:', error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to generate AI content" 
+      });
+    }
+  });
+
+  // STEP 4: Create shareable URL and return unique URL for copying
+  app.post("/api/create-shareable-url", authenticateUser, async (req, res) => {
+    try {
+      const { hotel_id } = req.body;
+      const userId = req.user!.id;
+
+      if (!hotel_id) {
+        return res.status(400).json({ message: "Hotel ID is required" });
+      }
+
+      // Get hotel data from database
+      const hotel = await storage.getHotel(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ message: "Hotel not found" });
+      }
+
+      // Verify user owns this hotel
+      if (hotel.userId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Ensure hotel has AI-generated content
+      if (!hotel.headline || !hotel.story) {
+        return res.status(400).json({ 
+          message: "Hotel must have AI-generated content before creating shareable URL" 
+        });
+      }
+
+      // Create unique shareable URL
+      const shareableUrl = `${req.protocol}://${req.get('Host')}/hotel_id=${hotel_id}`;
+      
+      console.log(`✅ Shareable URL created for hotel: ${hotel_id} → ${shareableUrl}`);
+
+      res.json({
+        hotel_id: hotel_id,
+        shareableUrl: shareableUrl,
+        hotel: hotel,
+        message: "Shareable URL created successfully. Copy and share this link!"
+      });
+
+    } catch (error) {
+      console.error('Error creating shareable URL:', error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to create shareable URL" 
       });
     }
   });
