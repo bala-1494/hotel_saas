@@ -1,13 +1,15 @@
 import React, { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import GenerationForm from "@/components/generation-form";
 import LoadingState from "@/components/loading-state";
 import GeneratedPage from "@/components/generated-page";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { HotelPageData } from "@shared/schema";
 
-type ViewState = 'form' | 'storing-hotel' | 'generating-ai' | 'creating-url' | 'generated';
+type ViewState = 'form' | 'storing-hotel' | 'hotels-list' | 'generating-ai' | 'creating-url' | 'generated';
 
 export default function Home() {
   const [viewState, setViewState] = useState<ViewState>('form');
@@ -15,6 +17,12 @@ export default function Home() {
   const [shareableUrl, setShareableUrl] = useState<string | null>(null);
   const [generatedData, setGeneratedData] = useState<HotelPageData | null>(null);
   const { toast } = useToast();
+
+  // Query to get user's saved hotels
+  const { data: userHotelsData, refetch: refetchHotels } = useQuery({
+    queryKey: ['/api/user/hotels'],
+    enabled: viewState === 'hotels-list', // Only fetch when viewing hotels list
+  });
 
   // STEP 2: Store hotel data from Google Maps URL
   const storeHotelMutation = useMutation({
@@ -25,8 +33,14 @@ export default function Home() {
     onSuccess: (data) => {
       console.log('✅ STEP 2: Hotel data stored:', data.hotel_id);
       setHotelId(data.hotel_id);
-      // Automatically proceed to STEP 3
-      generateAIMutation.mutate({ hotel_id: data.hotel_id });
+      toast({
+        title: "✅ Hotel Saved!",
+        description: "Hotel data stored successfully. You can now generate a page for it.",
+        variant: "default",
+      });
+      // Switch to hotels list view instead of auto-proceeding
+      setViewState('hotels-list');
+      refetchHotels(); // Refresh the hotels list
     },
     onError: (error: any) => {
       console.error('❌ STEP 2 Failed:', error);
@@ -135,6 +149,90 @@ export default function Home() {
     createUrlMutation.reset();
   };
 
+  const handleGeneratePageForHotel = (hotel_id: string) => {
+    console.log('🎯 Starting AI generation for existing hotel:', hotel_id);
+    setHotelId(hotel_id);
+    generateAIMutation.mutate({ hotel_id });
+  };
+
+  const renderHotelsList = () => {
+    if (!userHotelsData?.hotels) {
+      return (
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-4">Loading your hotels...</h2>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-6">
+          <h2 className="text-3xl font-bold mb-2" data-testid="text-hotels-title">Your Saved Hotels</h2>
+          <p className="text-muted-foreground">Choose a hotel to generate its marketing page</p>
+          <Button 
+            onClick={() => setViewState('form')} 
+            variant="outline" 
+            className="mt-4"
+            data-testid="button-add-hotel"
+          >
+            + Add Another Hotel
+          </Button>
+        </div>
+
+        {userHotelsData.hotels.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground mb-4">No hotels saved yet</p>
+            <Button onClick={() => setViewState('form')} data-testid="button-add-first-hotel">
+              Add Your First Hotel
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {userHotelsData.hotels.map((hotel: any) => (
+              <Card key={hotel.id} className="shadow-lg hover:shadow-xl transition-shadow">
+                <CardHeader>
+                  <CardTitle className="text-lg" data-testid={`text-hotel-name-${hotel.id}`}>
+                    {hotel.name}
+                  </CardTitle>
+                  {hotel.address && (
+                    <p className="text-sm text-muted-foreground" data-testid={`text-hotel-address-${hotel.id}`}>
+                      {hotel.address}
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      {hotel.rating && (
+                        <p className="text-sm" data-testid={`text-hotel-rating-${hotel.id}`}>
+                          ⭐ {hotel.rating}/5
+                        </p>
+                      )}
+                      {hotel.category && (
+                        <p className="text-xs text-muted-foreground" data-testid={`text-hotel-category-${hotel.id}`}>
+                          {hotel.category}
+                        </p>
+                      )}
+                    </div>
+                    <Button 
+                      onClick={() => handleGeneratePageForHotel(hotel.id)}
+                      disabled={generateAIMutation.isPending || createUrlMutation.isPending}
+                      data-testid={`button-generate-page-${hotel.id}`}
+                    >
+                      {generateAIMutation.isPending || createUrlMutation.isPending ? 'Generating...' : 'Generate Page'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderCurrentView = () => {
     const isLoading = storeHotelMutation.isPending || generateAIMutation.isPending || createUrlMutation.isPending;
     
@@ -153,6 +251,8 @@ export default function Home() {
             customMessage="Step 2: Storing hotel data from Google Maps..." 
           />
         );
+      case 'hotels-list':
+        return renderHotelsList();
       case 'generating-ai':
         return (
           <LoadingState 

@@ -53,6 +53,12 @@ export interface CreateShareableUrlResponse {
 }
 
 export const api = {
+  // Get user's saved hotels
+  async getUserHotels(): Promise<{ hotels: any[], message: string }> {
+    const response = await apiRequest('GET', '/api/user/hotels');
+    return response.json();
+  },
+
   // STEP 2: Store hotel data from Google Maps URL
   async storeHotelData(data: StoreHotelDataRequest): Promise<StoreHotelDataResponse> {
     const response = await apiRequest('POST', '/api/store-hotel-data', data);
