@@ -9,9 +9,15 @@ import {
   type InsertBooking, 
   type HotelPageData,
   type HotelWithImages,
-  type UserWithHotel
+  type UserWithHotel,
+  users,
+  hotels,
+  hotelImages,
+  bookings
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, and, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -300,4 +306,187 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// DatabaseStorage implementation using PostgreSQL via Drizzle ORM
+export class DatabaseStorage implements IStorage {
+  // User operations
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
+  }
+
+  // Hotel operations
+  async getHotel(id: string): Promise<Hotel | undefined> {
+    const [hotel] = await db.select().from(hotels).where(eq(hotels.id, id));
+    return hotel || undefined;
+  }
+
+  async getHotelByPlaceId(placeId: string): Promise<Hotel | undefined> {
+    const [hotel] = await db.select().from(hotels).where(eq(hotels.placeId, placeId));
+    return hotel || undefined;
+  }
+
+  async getHotelByUserId(userId: string): Promise<Hotel | undefined> {
+    const [hotel] = await db.select().from(hotels).where(eq(hotels.userId, userId));
+    return hotel || undefined;
+  }
+
+  async getActiveHotelByUserId(userId: string): Promise<Hotel | undefined> {
+    const [hotel] = await db
+      .select()
+      .from(hotels)
+      .where(and(eq(hotels.userId, userId), eq(hotels.isActive, true)));
+    return hotel || undefined;
+  }
+
+  async createHotel(insertHotel: InsertHotel): Promise<Hotel> {
+    const [hotel] = await db.insert(hotels).values(insertHotel as any).returning();
+    return hotel;
+  }
+
+  async updateHotel(id: string, updates: Partial<InsertHotel>): Promise<Hotel | undefined> {
+    const [hotel] = await db
+      .update(hotels)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(hotels.id, id))
+      .returning();
+    return hotel || undefined;
+  }
+
+  async deleteHotel(id: string): Promise<boolean> {
+    const result = await db.delete(hotels).where(eq(hotels.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async deactivateUserHotels(userId: string): Promise<number> {
+    const result = await db
+      .update(hotels)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(and(eq(hotels.userId, userId), eq(hotels.isActive, true)));
+    return result.rowCount || 0;
+  }
+
+  // Hotel Images operations
+  async getHotelImages(hotelId: string): Promise<HotelImage[]> {
+    return await db
+      .select()
+      .from(hotelImages)
+      .where(eq(hotelImages.hotelId, hotelId))
+      .orderBy(hotelImages.displayOrder);
+  }
+
+  async createHotelImage(insertImage: InsertHotelImage): Promise<HotelImage> {
+    const [image] = await db.insert(hotelImages).values(insertImage).returning();
+    return image;
+  }
+
+  async updateHotelImage(id: string, updates: Partial<InsertHotelImage>): Promise<HotelImage | undefined> {
+    const [image] = await db
+      .update(hotelImages)
+      .set(updates)
+      .where(eq(hotelImages.id, id))
+      .returning();
+    return image || undefined;
+  }
+
+  async deleteHotelImage(id: string): Promise<boolean> {
+    const result = await db.delete(hotelImages).where(eq(hotelImages.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async setPrimaryImage(hotelId: string, imageId: string): Promise<boolean> {
+    // First, unset all primary flags for this hotel
+    await db
+      .update(hotelImages)
+      .set({ isPrimary: false })
+      .where(eq(hotelImages.hotelId, hotelId));
+
+    // Set the specified image as primary
+    const result = await db
+      .update(hotelImages)
+      .set({ isPrimary: true })
+      .where(and(eq(hotelImages.id, imageId), eq(hotelImages.hotelId, hotelId)));
+
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Booking operations
+  async createBooking(insertBooking: InsertBooking): Promise<Booking> {
+    const [booking] = await db.insert(bookings).values(insertBooking).returning();
+    return booking;
+  }
+
+  async getBooking(id: string): Promise<Booking | undefined> {
+    const [booking] = await db.select().from(bookings).where(eq(bookings.id, id));
+    return booking || undefined;
+  }
+
+  async getHotelBookings(hotelId: string): Promise<Booking[]> {
+    return await db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.hotelId, hotelId))
+      .orderBy(desc(bookings.createdAt));
+  }
+
+  // Combined operations
+  async getHotelPageData(hotelId: string): Promise<HotelPageData | undefined> {
+    const hotel = await this.getHotel(hotelId);
+    if (!hotel) return undefined;
+
+    const user = await this.getUser(hotel.userId);
+    if (!user) return undefined;
+
+    const images = await this.getHotelImages(hotelId);
+
+    return { hotel, images, user };
+  }
+
+  async getHotelWithImages(hotelId: string): Promise<HotelWithImages | undefined> {
+    const hotel = await this.getHotel(hotelId);
+    if (!hotel) return undefined;
+
+    const images = await this.getHotelImages(hotelId);
+    return { hotel, images };
+  }
+
+  async getUserWithHotel(userId: string): Promise<UserWithHotel | undefined> {
+    const user = await this.getUser(userId);
+    if (!user) return undefined;
+
+    const hotel = await this.getActiveHotelByUserId(userId);
+    return { user, hotel: hotel || null };
+  }
+
+  // Validation and utilities
+  async canUserCreateHotel(userId: string): Promise<boolean> {
+    // Users can always create hotels, but existing active hotels will be deactivated
+    return true;
+  }
+
+  async hasActiveHotel(userId: string): Promise<boolean> {
+    const activeHotel = await this.getActiveHotelByUserId(userId);
+    return !!activeHotel;
+  }
+}
+
+// Use DatabaseStorage instead of MemStorage - commented for blueprint integration reference
+export const storage = new DatabaseStorage();
