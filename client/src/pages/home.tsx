@@ -19,7 +19,7 @@ export default function Home() {
   const { toast } = useToast();
 
   // Query to get user's saved hotels
-  const { data: userHotelsData, refetch: refetchHotels } = useQuery({
+  const { data: userHotelsData, refetch: refetchHotels } = useQuery<{ hotels: any[], message: string }>({
     queryKey: ['/api/user/hotels'],
     enabled: viewState === 'hotels-list', // Only fetch when viewing hotels list
   });
@@ -54,7 +54,7 @@ export default function Home() {
     },
   });
 
-  // STEP 3: Generate AI content from stored DB records
+  // STEP 3: Generate AI content from stored DB records (ONLY - no auto Step 4)
   const generateAIMutation = useMutation({
     mutationFn: api.generateAIContent,
     onMutate: () => {
@@ -62,8 +62,14 @@ export default function Home() {
     },
     onSuccess: (data) => {
       console.log('✅ STEP 3: AI content generated for hotel:', data.hotel_id);
-      // Automatically proceed to STEP 4
-      createUrlMutation.mutate({ hotel_id: data.hotel_id });
+      toast({
+        title: "✅ AI Content Generated!",
+        description: "Marketing content created successfully. You can now create a shareable URL.",
+        variant: "default",
+      });
+      // Return to hotels list instead of auto-proceeding to Step 4
+      setViewState('hotels-list');
+      refetchHotels(); // Refresh to show updated hotel data
     },
     onError: (error: any) => {
       console.error('❌ STEP 3 Failed:', error);
@@ -156,7 +162,7 @@ export default function Home() {
   };
 
   const renderHotelsList = () => {
-    if (!userHotelsData?.hotels) {
+    if (!userHotelsData) {
       return (
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
