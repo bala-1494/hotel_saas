@@ -30,6 +30,7 @@ export interface IStorage {
   getHotel(id: string): Promise<Hotel | undefined>;
   getHotelByPlaceId(placeId: string): Promise<Hotel | undefined>;
   getHotelByUserId(userId: string): Promise<Hotel | undefined>;
+  getHotelsByUserId(userId: string): Promise<Hotel[]>;
   getActiveHotelByUserId(userId: string): Promise<Hotel | undefined>;
   createHotel(hotel: InsertHotel): Promise<Hotel>;
   updateHotel(id: string, updates: Partial<InsertHotel>): Promise<Hotel | undefined>;
@@ -116,6 +117,10 @@ export class MemStorage implements IStorage {
 
   async getHotelByUserId(userId: string): Promise<Hotel | undefined> {
     return Array.from(this.hotels.values()).find(hotel => hotel.userId === userId);
+  }
+
+  async getHotelsByUserId(userId: string): Promise<Hotel[]> {
+    return Array.from(this.hotels.values()).filter(hotel => hotel.userId === userId);
   }
 
   async getActiveHotelByUserId(userId: string): Promise<Hotel | undefined> {
@@ -347,6 +352,11 @@ export class DatabaseStorage implements IStorage {
   async getHotelByUserId(userId: string): Promise<Hotel | undefined> {
     const [hotel] = await db.select().from(hotels).where(eq(hotels.userId, userId));
     return hotel || undefined;
+  }
+
+  async getHotelsByUserId(userId: string): Promise<Hotel[]> {
+    const hotelsList = await db.select().from(hotels).where(eq(hotels.userId, userId));
+    return hotelsList;
   }
 
   async getActiveHotelByUserId(userId: string): Promise<Hotel | undefined> {

@@ -438,6 +438,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get user's saved hotels - SECURED
+  app.get("/api/user/hotels", authenticateUser, async (req, res) => {
+    try {
+      const authenticatedUserId = req.user!.id;
+      const hotels = await storage.getHotelsByUserId(authenticatedUserId);
+      
+      res.json({ 
+        hotels: hotels,
+        message: `Found ${hotels.length} saved hotels` 
+      });
+
+    } catch (error) {
+      console.error('Error fetching user hotels:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch your saved hotels" 
+      });
+    }
+  });
+
   // Hotel Images management routes - SECURED
   app.post("/api/hotels/:id/images", authenticateUser, async (req, res) => {
     try {
