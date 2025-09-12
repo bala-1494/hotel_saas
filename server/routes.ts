@@ -7,6 +7,12 @@ import { mailgunService } from "./services/mailgun";
 import { insertBookingSchema, insertHotelSchema, insertUserSchema, insertHotelImageSchema } from "@shared/schema";
 import { z } from "zod";
 import { authenticateUser, rateLimit } from "./middleware/auth";
+import { createClient } from '@supabase/supabase-js';
+
+// Create Supabase client for user data retrieval
+const supabaseUrl = process.env.VITE_SUPABASE_URL!;
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -65,6 +71,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         rating: hotelData.rating || 0,
         reviews: hotelData.reviews || [],
       });
+
+      // Ensure user exists in our users table before creating hotel
+      console.log(`Checking if user exists in database: ${userId}`);
+      let user = await storage.getUser(userId);
+      
+      if (!user) {
+        console.log(`User not found in database, creating new user record for: ${userId}`);
+        
+        // Get full user data from Supabase auth
+        const authHeader = req.headers.authorization!;
+        const token = authHeader.substring(7); // Remove 'Bearer '
+        const { data: authData } = await supabase.auth.getUser(token);
+        
+        console.log(`Supabase user metadata:`, {
+          id: authData?.user?.id,
+          email: authData?.user?.email,
+          fullName: authData?.user?.user_metadata?.full_name,
+          avatarUrl: authData?.user?.user_metadata?.avatar_url
+        });
+        
+        // Create user record in our database
+        user = await storage.createUser({
+          id: userId,
+          email: req.user!.email,
+          fullName: authData?.user?.user_metadata?.full_name || null,
+          avatarUrl: authData?.user?.user_metadata?.avatar_url || null,
+        });
+        
+        console.log(`✅ Successfully created user record in database:`, user);
+      } else {
+        console.log(`✅ User already exists in database:`, user);
+      }
 
       // Create new hotel record with AI-generated content
       const hotelCreateData = {
