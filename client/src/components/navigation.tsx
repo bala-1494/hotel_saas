@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X, Sparkles, Settings } from "lucide-react";
+import { Menu, X, Sparkles, Settings, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function Navigation() {
@@ -42,6 +42,15 @@ export default function Navigation() {
               <h1 className="ml-4 text-xl font-bold text-gray-900 dark:text-white">
                 Hotel Page Generator
               </h1>
+            </div>
+            <div className="flex items-center">
+              <button
+                className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                data-testid="profile-button"
+                aria-label="Profile"
+              >
+                <User className="h-6 w-6" />
+              </button>
             </div>
           </div>
         </div>
