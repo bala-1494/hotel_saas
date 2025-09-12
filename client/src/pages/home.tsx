@@ -53,12 +53,26 @@ export default function Home() {
     },
     onError: (error: any) => {
       console.error('❌ STEP 3 Failed:', error);
-      const message = error.message || "Failed to generate AI content. Please try again.";
-      toast({
-        title: "Step 3 Failed - AI Content Generation",
-        description: message,
-        variant: "destructive",
-      });
+      
+      // Check if it's a Google AI overload error
+      const isAIOverloaded = error.message?.includes('overloaded') || 
+                            error.message?.includes('503') ||
+                            error.message?.includes('UNAVAILABLE');
+      
+      if (isAIOverloaded) {
+        toast({
+          title: "⏳ Google AI Temporarily Overloaded",
+          description: "Google's AI is experiencing high traffic. Please try again in a few minutes!",
+          variant: "destructive",
+        });
+      } else {
+        const message = error.message || "Failed to generate AI content. Please try again.";
+        toast({
+          title: "Step 3 Failed - AI Content Generation",
+          description: message,
+          variant: "destructive",
+        });
+      }
       setViewState('form');
     },
   });
