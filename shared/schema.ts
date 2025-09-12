@@ -62,10 +62,7 @@ export const hotels = pgTable("hotels", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  // One hotel per user constraint
-  uniqueUserHotel: unique("unique_user_hotel").on(table.userId),
-}));
+});
 
 // Hotel Images table - Store hotel photos
 export const hotelImages = pgTable("hotel_images", {

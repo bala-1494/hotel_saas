@@ -24,9 +24,11 @@ export interface IStorage {
   getHotel(id: string): Promise<Hotel | undefined>;
   getHotelByPlaceId(placeId: string): Promise<Hotel | undefined>;
   getHotelByUserId(userId: string): Promise<Hotel | undefined>;
+  getActiveHotelByUserId(userId: string): Promise<Hotel | undefined>;
   createHotel(hotel: InsertHotel): Promise<Hotel>;
   updateHotel(id: string, updates: Partial<InsertHotel>): Promise<Hotel | undefined>;
   deleteHotel(id: string): Promise<boolean>;
+  deactivateUserHotels(userId: string): Promise<number>;
   
   // Hotel Images operations
   getHotelImages(hotelId: string): Promise<HotelImage[]>;
@@ -45,8 +47,9 @@ export interface IStorage {
   getHotelWithImages(hotelId: string): Promise<HotelWithImages | undefined>;
   getUserWithHotel(userId: string): Promise<UserWithHotel | undefined>;
   
-  // Validation
+  // Validation and utilities
   canUserCreateHotel(userId: string): Promise<boolean>;
+  hasActiveHotel(userId: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -109,13 +112,11 @@ export class MemStorage implements IStorage {
     return Array.from(this.hotels.values()).find(hotel => hotel.userId === userId);
   }
 
-  async createHotel(insertHotel: InsertHotel): Promise<Hotel> {
-    // Check one-hotel-per-user constraint
-    const existingHotel = await this.getHotelByUserId(insertHotel.userId);
-    if (existingHotel) {
-      throw new Error("User already has a hotel. Only one hotel per user is allowed.");
-    }
+  async getActiveHotelByUserId(userId: string): Promise<Hotel | undefined> {
+    return Array.from(this.hotels.values()).find(hotel => hotel.userId === userId && hotel.isActive);
+  }
 
+  async createHotel(insertHotel: InsertHotel): Promise<Hotel> {
     const id = randomUUID();
     const hotel: Hotel = {
       ...insertHotel,
@@ -142,6 +143,20 @@ export class MemStorage implements IStorage {
     };
     this.hotels.set(id, hotel);
     return hotel;
+  }
+
+  async deactivateUserHotels(userId: string): Promise<number> {
+    const userHotels = Array.from(this.hotels.values()).filter(hotel => hotel.userId === userId && hotel.isActive);
+    let deactivatedCount = 0;
+    
+    for (const hotel of userHotels) {
+      const updated = await this.updateHotel(hotel.id, { isActive: false });
+      if (updated) {
+        deactivatedCount++;
+      }
+    }
+    
+    return deactivatedCount;
   }
 
   async updateHotel(id: string, updates: Partial<InsertHotel>): Promise<Hotel | undefined> {
@@ -269,14 +284,19 @@ export class MemStorage implements IStorage {
     const user = await this.getUser(userId);
     if (!user) return undefined;
 
-    const hotel = await this.getHotelByUserId(userId);
+    const hotel = await this.getActiveHotelByUserId(userId);
     return { user, hotel: hotel || null };
   }
 
-  // Validation
+  // Validation and utilities
   async canUserCreateHotel(userId: string): Promise<boolean> {
-    const existingHotel = await this.getHotelByUserId(userId);
-    return !existingHotel;
+    // Users can always create hotels, but existing active hotels will be deactivated
+    return true;
+  }
+
+  async hasActiveHotel(userId: string): Promise<boolean> {
+    const activeHotel = await this.getActiveHotelByUserId(userId);
+    return !!activeHotel;
   }
 }
 

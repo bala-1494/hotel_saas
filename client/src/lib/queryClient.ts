@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -12,11 +13,25 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  // Get current session for authentication
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  const headers: Record<string, string> = {};
+  
+  if (data) {
+    headers["Content-Type"] = "application/json";
+  }
+  
+  // Add Authorization header with JWT token if authenticated
+  if (session?.access_token) {
+    headers["Authorization"] = `Bearer ${session.access_token}`;
+  }
+  
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: "include", // Keep for any cookie-based fallback
   });
 
   await throwIfResNotOk(res);
@@ -29,7 +44,18 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    // Get current session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    const headers: Record<string, string> = {};
+    
+    // Add Authorization header with JWT token if authenticated
+    if (session?.access_token) {
+      headers["Authorization"] = `Bearer ${session.access_token}`;
+    }
+    
     const res = await fetch(queryKey.join("/") as string, {
+      headers,
       credentials: "include",
     });
 

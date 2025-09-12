@@ -6,23 +6,19 @@ import { geminiService } from "./services/gemini";
 import { mailgunService } from "./services/mailgun";
 import { insertBookingSchema, insertHotelSchema, insertUserSchema, insertHotelImageSchema } from "@shared/schema";
 import { z } from "zod";
+import { authenticateUser, rateLimit } from "./middleware/auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  // Generate hotel page from Google Maps URL
-  app.post("/api/generate-page", async (req, res) => {
+  // Generate hotel page from Google Maps URL - SECURED with authentication
+  app.post("/api/generate-page", authenticateUser, rateLimit(300000, 10), async (req, res) => {
     try {
-      const { mapsUrl, userId } = req.body;
+      const { mapsUrl } = req.body;
+      const userId = req.user!.id; // Get userId from authenticated session
       
       if (!mapsUrl || typeof mapsUrl !== 'string') {
         return res.status(400).json({ 
           message: "Google Maps URL is required" 
-        });
-      }
-
-      if (!userId || typeof userId !== 'string') {
-        return res.status(400).json({ 
-          message: "User ID is required" 
         });
       }
 
@@ -40,17 +36,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Check if user can create a hotel (one per user constraint)
-      const canCreateHotel = await storage.canUserCreateHotel(userId);
-      if (!canCreateHotel) {
-        const existingHotel = await storage.getHotelByUserId(userId);
-        if (existingHotel) {
-          return res.json({
-            hotel: existingHotel,
-            images: await storage.getHotelImages(existingHotel.id),
-            message: "User already has a hotel page"
-          });
-        }
+      // Check if user has an active hotel and deactivate it
+      const hasActiveHotel = await storage.hasActiveHotel(userId);
+      if (hasActiveHotel) {
+        console.log(`User ${userId} has existing active hotel(s), deactivating them...`);
+        const deactivatedCount = await storage.deactivateUserHotels(userId);
+        console.log(`Deactivated ${deactivatedCount} hotels for user ${userId}`);
       }
 
       // Fetch hotel data from Google Maps
@@ -107,9 +98,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({
+        hotel_id: hotel.id,
         hotel,
         images,
-        message: "Hotel page generated successfully"
+        message: hasActiveHotel 
+          ? "Previous hotel page deactivated and new hotel page generated successfully"
+          : "Hotel page generated successfully"
       });
 
     } catch (error) {
@@ -228,10 +222,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User management routes
-  app.post("/api/users", async (req, res) => {
+  // User management routes - SECURED
+  app.post("/api/users", authenticateUser, async (req, res) => {
     try {
-      const validationResult = insertUserSchema.safeParse(req.body);
+      const authenticatedUserId = req.user!.id;
+      const validationResult = insertUserSchema.safeParse({
+        ...req.body,
+        id: authenticatedUserId, // Use authenticated user ID
+      });
       
       if (!validationResult.success) {
         return res.status(400).json({ 
@@ -261,10 +259,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user with their hotel
-  app.get("/api/users/:id", async (req, res) => {
+  // Get user with their hotel - SECURED
+  app.get("/api/users/:id", authenticateUser, async (req, res) => {
     try {
       const { id } = req.params;
+      const authenticatedUserId = req.user!.id;
+      
+      // Users can only access their own data
+      if (id !== authenticatedUserId) {
+        return res.status(403).json({ 
+          message: "Access denied. You can only access your own user data." 
+        });
+      }
+      
       const userWithHotel = await storage.getUserWithHotel(id);
       
       if (!userWithHotel) {
@@ -283,10 +290,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Hotel Images management routes
-  app.post("/api/hotels/:id/images", async (req, res) => {
+  // Hotel Images management routes - SECURED
+  app.post("/api/hotels/:id/images", authenticateUser, async (req, res) => {
     try {
       const { id } = req.params;
+      const authenticatedUserId = req.user!.id;
       const validationResult = insertHotelImageSchema.safeParse({
         ...req.body,
         hotelId: id,
@@ -301,11 +309,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const imageData = validationResult.data;
       
-      // Verify hotel exists
+      // Verify hotel exists and user owns it
       const hotel = await storage.getHotel(id);
       if (!hotel) {
         return res.status(404).json({ 
           message: "Hotel not found" 
+        });
+      }
+      
+      if (hotel.userId !== authenticatedUserId) {
+        return res.status(403).json({ 
+          message: "Access denied. You can only manage your own hotel's images." 
         });
       }
 
@@ -343,15 +357,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/hotels/:hotelId/images/:imageId/primary", async (req, res) => {
+  app.put("/api/hotels/:hotelId/images/:imageId/primary", authenticateUser, async (req, res) => {
     try {
       const { hotelId, imageId } = req.params;
+      const authenticatedUserId = req.user!.id;
+      
+      // Verify hotel exists and user owns it
+      const hotel = await storage.getHotel(hotelId);
+      if (!hotel) {
+        return res.status(404).json({ 
+          message: "Hotel not found" 
+        });
+      }
+      
+      if (hotel.userId !== authenticatedUserId) {
+        return res.status(403).json({ 
+          message: "Access denied. You can only manage your own hotel's images." 
+        });
+      }
       
       const success = await storage.setPrimaryImage(hotelId, imageId);
       
       if (!success) {
         return res.status(404).json({ 
-          message: "Hotel or image not found" 
+          message: "Image not found" 
         });
       }
 
@@ -365,16 +394,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get hotel bookings (for hotel management)
-  app.get("/api/hotels/:id/bookings", async (req, res) => {
+  // Get hotel bookings (for hotel management) - SECURED
+  app.get("/api/hotels/:id/bookings", authenticateUser, async (req, res) => {
     try {
       const { id } = req.params;
+      const authenticatedUserId = req.user!.id;
       
-      // Verify hotel exists
+      // Verify hotel exists and user owns it
       const hotel = await storage.getHotel(id);
       if (!hotel) {
         return res.status(404).json({ 
           message: "Hotel not found" 
+        });
+      }
+      
+      if (hotel.userId !== authenticatedUserId) {
+        return res.status(403).json({ 
+          message: "Access denied. You can only view bookings for your own hotel." 
         });
       }
 
