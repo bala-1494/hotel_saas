@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Sparkles, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function Navigation() {
@@ -8,8 +8,8 @@ export default function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navItems = [
-    { path: "/", label: "Page generator" },
-    { path: "/booking-config", label: "Booking form config" },
+    { path: "/", label: "Page generator", icon: Sparkles },
+    { path: "/booking-config", label: "Booking form config", icon: Settings },
   ];
 
   const toggleMenu = () => {
@@ -79,22 +79,26 @@ export default function Navigation() {
           </div>
           
           <nav className="space-y-2">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                href={item.path}
-                onClick={closeMenu}
-                className={cn(
-                  "block px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-                  location === item.path
-                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                    : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-                )}
-                data-testid={`nav-${item.path === "/" ? "home" : item.path.slice(1)}`}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const IconComponent = item.icon;
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  onClick={closeMenu}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                    location === item.path
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                      : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                  )}
+                  data-testid={`nav-${item.path === "/" ? "home" : item.path.slice(1)}`}
+                >
+                  <IconComponent className="h-5 w-5" />
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </div>
