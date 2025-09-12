@@ -8,15 +8,9 @@ import { randomUUID } from 'crypto';
 async function createTestData() {
   console.log('Creating test data for hotel page display and booking tests...\n');
 
-  // Create a test user first
-  const testUserId = randomUUID();
-  const testUser = await storage.createUser({
-    id: testUserId,
-    email: 'test@example.com',
-    fullName: 'Test User',
-    avatarUrl: 'https://via.placeholder.com/150'
-  });
-  console.log('✓ Created test user:', testUser.id);
+  // Note: Removed mock test user to prevent conflicts with real Supabase authentication
+  // Real users will be created through Supabase auth flow
+  const testUserId = randomUUID(); // Use random ID for test data association
 
   // Create a test hotel with realistic data
   const testHotelId = randomUUID();
