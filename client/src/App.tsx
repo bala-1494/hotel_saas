@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import Navigation from "@/components/navigation";
 import Home from "@/pages/home";
 import BookingConfig from "@/pages/booking-config";
+import HotelPage from "@/pages/hotel-page";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 
@@ -25,18 +26,42 @@ function Router() {
     );
   }
 
-  // Show login page if user is not authenticated
-  if (!user) {
-    return <Login />;
-  }
-
-  // Show main app for authenticated users
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Navigation />
       <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/booking-config" component={BookingConfig} />
+        {/* Public hotel pages - no authentication required */}
+        <Route path="/hotel_id=:hotelId">
+          <HotelPage />
+        </Route>
+        
+        {/* Support quoted hotel_id format */}
+        <Route path='/hotel_id=":hotelId"'>
+          <HotelPage />
+        </Route>
+        
+        {/* Authenticated routes - order matters to prevent shadowing */}
+        <Route path="/booking-config">
+          {user ? (
+            <div>
+              <Navigation />
+              <BookingConfig />
+            </div>
+          ) : (
+            <Login />
+          )}
+        </Route>
+        
+        <Route path="/">
+          {user ? (
+            <div>
+              <Navigation />
+              <Home />
+            </div>
+          ) : (
+            <Login />
+          )}
+        </Route>
+        
         <Route component={NotFound} />
       </Switch>
     </div>
