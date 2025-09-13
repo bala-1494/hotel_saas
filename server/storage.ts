@@ -148,6 +148,7 @@ export class MemStorage implements IStorage {
       currency: insertHotel.currency ?? "USD",
       coordinates: insertHotel.coordinates ?? null,
       reviews: Array.isArray(insertHotel.reviews) ? insertHotel.reviews as Array<{author: string; text: string; rating: number; date: string}> : [],
+      sitePath: insertHotel.sitePath ?? null,
       isActive: insertHotel.isActive ?? true,
       createdAt: new Date(),
       updatedAt: new Date(),

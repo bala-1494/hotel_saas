@@ -58,6 +58,9 @@ export const hotels = pgTable("hotels", {
     date: string;
   }>>().default([]),
   
+  // URL for shareable page
+  sitePath: text("site_path").unique(),
+  
   // Status and metadata
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),

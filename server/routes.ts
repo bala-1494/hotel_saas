@@ -190,19 +190,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reviews: hotel.reviews || [],
       });
 
-      // Update hotel record with AI-generated content
-      const updatedHotel = await storage.updateHotel(hotel_id, {
+      // Update hotel record with AI-generated content and set sitePath if not already set
+      const updateData: any = {
         headline: generatedContent.headline,
         story: generatedContent.story,
         reviewSummary: generatedContent.reviewSummary,
-      });
+      };
+
+      // Automatically set sitePath when AI content is generated (if not already set)
+      if (!hotel.sitePath) {
+        updateData.sitePath = `/hotel/${hotel_id}`;
+        console.log(`✅ Setting sitePath for hotel: ${hotel_id} → ${updateData.sitePath}`);
+      }
+
+      const updatedHotel = await storage.updateHotel(hotel_id, updateData);
 
       console.log(`✅ AI content generated and stored for hotel: ${hotel_id}`);
+
+      // Build the full shareable URL if sitePath is set
+      const shareableUrl = updatedHotel?.sitePath 
+        ? `${req.protocol}://${req.get('Host')}${updatedHotel.sitePath}`
+        : null;
 
       res.json({
         hotel_id: hotel_id,
         content: generatedContent,
         hotel: updatedHotel,
+        shareableUrl: shareableUrl,
         message: "AI content generated successfully from database records"
       });
 
@@ -214,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // STEP 4: Create shareable URL and return unique URL for copying
+  // STEP 4: Create shareable URL and return unique URL for copying (idempotent)
   app.post("/api/create-shareable-url", authenticateUser, async (req, res) => {
     try {
       const { hotel_id } = req.body;
@@ -242,15 +256,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create unique shareable URL
-      const shareableUrl = `${req.protocol}://${req.get('Host')}/hotel_id=${hotel_id}`;
+      // If sitePath already exists, return it (idempotent)
+      if (hotel.sitePath) {
+        const shareableUrl = `${req.protocol}://${req.get('Host')}${hotel.sitePath}`;
+        console.log(`✅ Returning existing shareable URL for hotel: ${hotel_id} → ${shareableUrl}`);
+        
+        res.json({
+          hotel_id: hotel_id,
+          shareableUrl: shareableUrl,
+          hotel: hotel,
+          message: "Shareable URL already exists. Copy and share this link!"
+        });
+        return;
+      }
+
+      // Create and persist sitePath
+      const sitePath = `/hotel/${hotel_id}`;
+      const updatedHotel = await storage.updateHotel(hotel_id, { sitePath });
+
+      if (!updatedHotel) {
+        throw new Error("Failed to update hotel with sitePath");
+      }
+
+      // Create full shareable URL
+      const shareableUrl = `${req.protocol}://${req.get('Host')}${sitePath}`;
       
-      console.log(`✅ Shareable URL created for hotel: ${hotel_id} → ${shareableUrl}`);
+      console.log(`✅ Shareable URL created and persisted for hotel: ${hotel_id} → ${shareableUrl}`);
 
       res.json({
         hotel_id: hotel_id,
         shareableUrl: shareableUrl,
-        hotel: hotel,
+        hotel: updatedHotel,
         message: "Shareable URL created successfully. Copy and share this link!"
       });
 
@@ -444,8 +480,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authenticatedUserId = req.user!.id;
       const hotels = await storage.getHotelsByUserId(authenticatedUserId);
       
+      // Add full shareableUrl to each hotel that has a sitePath
+      const hotelsWithUrls = hotels.map(hotel => ({
+        ...hotel,
+        shareableUrl: hotel.sitePath 
+          ? `${req.protocol}://${req.get('Host')}${hotel.sitePath}`
+          : null
+      }));
+      
       res.json({ 
-        hotels: hotels,
+        hotels: hotelsWithUrls,
         message: `Found ${hotels.length} saved hotels` 
       });
 
