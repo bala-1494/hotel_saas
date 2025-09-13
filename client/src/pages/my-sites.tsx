@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExternalLink, Globe } from "lucide-react";
 
 export default function MySites() {
-  const { data: userHotelsData, isLoading, error } = useQuery({
+  const { data: userHotelsData, isLoading, error } = useQuery<{hotels: any[]}>({
     queryKey: ['/api/user/hotels'],
   });
 
