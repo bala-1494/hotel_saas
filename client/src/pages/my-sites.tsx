@@ -1,16 +1,19 @@
-import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExternalLink, Globe } from "lucide-react";
 
 export default function MySites() {
+  const { loading: authLoading, session } = useAuth();
+  
   const { data: userHotelsData, isLoading, error } = useQuery<{hotels: any[]}>({
     queryKey: ['/api/user/hotels'],
+    enabled: !authLoading && !!session, // Only fetch when auth is ready and user is logged in
   });
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
