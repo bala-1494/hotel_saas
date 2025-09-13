@@ -31,6 +31,11 @@ function AppContent() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Switch>
         {/* Public hotel pages - no authentication required */}
+        <Route path="/hotel/:hotelId">
+          <HotelPage />
+        </Route>
+        
+        {/* Legacy support for old URL format */}
         <Route path="/hotel_id=:hotelId">
           <HotelPage />
         </Route>
