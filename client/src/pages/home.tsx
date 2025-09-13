@@ -222,13 +222,23 @@ export default function Home() {
                         </p>
                       )}
                     </div>
-                    <Button 
-                      onClick={() => handleGeneratePageForHotel(hotel.id)}
-                      disabled={generateAIMutation.isPending || createUrlMutation.isPending}
-                      data-testid={`button-generate-page-${hotel.id}`}
-                    >
-                      {generateAIMutation.isPending || createUrlMutation.isPending ? 'Generating...' : 'Generate Page'}
-                    </Button>
+                    {hotel.shareableUrl ? (
+                      <Button 
+                        onClick={() => window.open(hotel.shareableUrl, '_blank')}
+                        variant="default"
+                        data-testid={`button-view-site-${hotel.id}`}
+                      >
+                        View Site
+                      </Button>
+                    ) : (
+                      <Button 
+                        onClick={() => handleGeneratePageForHotel(hotel.id)}
+                        disabled={generateAIMutation.isPending || createUrlMutation.isPending}
+                        data-testid={`button-generate-page-${hotel.id}`}
+                      >
+                        {generateAIMutation.isPending || createUrlMutation.isPending ? 'Generating...' : 'Generate Page'}
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

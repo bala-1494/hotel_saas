@@ -10,6 +10,7 @@ export default function Navigation() {
 
   const navItems = [
     { path: "/", label: "Page generator", icon: Sparkles },
+    { path: "/my-sites", label: "My sites", icon: Sparkles },
     { path: "/booking-config", label: "Booking form config", icon: Settings },
   ];
 

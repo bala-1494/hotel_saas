@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import Navigation from "@/components/navigation";
 import Home from "@/pages/home";
+import MySites from "@/pages/my-sites";
 import BookingConfig from "@/pages/booking-config";
 import HotelPage from "@/pages/hotel-page";
 import NotFound from "@/pages/not-found";
@@ -40,6 +41,17 @@ function AppContent() {
         </Route>
         
         {/* Authenticated routes - order matters to prevent shadowing */}
+        <Route path="/my-sites">
+          {user ? (
+            <div>
+              <Navigation />
+              <MySites />
+            </div>
+          ) : (
+            <Login />
+          )}
+        </Route>
+        
         <Route path="/booking-config">
           {user ? (
             <div>
